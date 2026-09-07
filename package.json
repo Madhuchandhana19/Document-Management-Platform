@@ -1,0 +1,19 @@
+{
+  "name": "document-management-platform",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "format": "npm --prefix frontend run format"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.5.0"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  }
+}

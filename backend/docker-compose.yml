@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: dms-mysql-db
+    restart: always
+    environment:
+      MYSQL_DATABASE: dms_db
+      MYSQL_USER: dms_user
+      MYSQL_PASSWORD: dms_password
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "dms_user", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  backend:
+    build: .
+    container_name: dms-backend-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://db:3306/dms_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+      DB_USERNAME: dms_user
+      DB_PASSWORD: dms_password
+      JWT_SECRET: ${JWT_SECRET:-your_32_character_long_super_secret_key_at_least_256_bits}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+
+volumes:
+  mysql-data:

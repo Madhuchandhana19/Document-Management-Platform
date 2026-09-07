@@ -1,0 +1,21 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/dms_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:madhu}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:your_32_character_long_super_secret_key_at_least_256_bits}
+    expiration: ${JWT_EXPIRATION:86400000} # 24 hours in milliseconds
