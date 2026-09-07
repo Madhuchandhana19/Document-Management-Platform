@@ -79,11 +79,31 @@ public class DataSeeder implements CommandLineRunner {
                 .isActive(true)
                 .build();
 
+        Users compliance = Users.builder()
+                .name("Frank Compliance")
+                .email("compliance@dms.com")
+                .phoneNumber("1234567895")
+                .passwordHash(encodedPassword)
+                .role(Role.COMPLIANCE_OFFICER)
+                .isActive(true)
+                .build();
+
+        Users guest = Users.builder()
+                .name("Grace Guest")
+                .email("guest@dms.com")
+                .phoneNumber("1234567896")
+                .passwordHash(encodedPassword)
+                .role(Role.GUEST)
+                .isActive(true)
+                .build();
+
         userRepository.save(admin);
         userRepository.save(owner);
         userRepository.save(editor);
         userRepository.save(approver);
         userRepository.save(viewer);
+        userRepository.save(compliance);
+        userRepository.save(guest);
 
         // 2. Create Sample Documents owned by owner
         Document doc1 = Document.builder()

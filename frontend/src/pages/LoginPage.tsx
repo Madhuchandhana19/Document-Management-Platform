@@ -14,6 +14,8 @@ const demoAccounts = [
   { role: 'Editor', email: 'editor@dms.com', color: '#7C3AED' },
   { role: 'Approver', email: 'approver@dms.com', color: '#D97706' },
   { role: 'Viewer', email: 'viewer@dms.com', color: '#0891B2' },
+  { role: 'Compliance', email: 'compliance@dms.com', color: '#9333EA' },
+  { role: 'Guest', email: 'guest@dms.com', color: '#64748B' },
 ]
 
 export default function LoginPage({ onNavigate, onLoginSuccess }: Props) {

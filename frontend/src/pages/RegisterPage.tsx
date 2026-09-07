@@ -23,7 +23,8 @@ export default function RegisterPage({ onNavigate }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  
+  const [role, setRole] = useState('DOCUMENT_OWNER')
+
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -65,7 +66,7 @@ export default function RegisterPage({ onNavigate }: Props) {
         phoneNumber: phoneNumber,
         email: email,
         password: password,
-        role: 'DOCUMENT_OWNER'
+        role: role
       })
 
       if (response.success) {
@@ -221,6 +222,24 @@ export default function RegisterPage({ onNavigate }: Props) {
                   placeholder="you@example.com"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-700 text-[#1E293B] mb-2 uppercase tracking-wide">System Role</label>
+              <select
+                value={role}
+                disabled={loading || success}
+                onChange={e => setRole(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#1E293B] text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25 focus:border-[#2563EB] focus:bg-white transition-all font-medium"
+              >
+                <option value="DOCUMENT_OWNER">Document Owner (Full control over own docs)</option>
+                <option value="EDITOR">Editor (Create, upload & modify documents)</option>
+                <option value="APPROVER">Approver (Approve & reject workflows)</option>
+                <option value="VIEWER">Viewer (Read-only access)</option>
+                <option value="COMPLIANCE_OFFICER">Compliance Officer (Auditing & retention)</option>
+                <option value="GUEST">Guest (Very limited access)</option>
+                <option value="ADMIN">Admin (Full system control)</option>
+              </select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
