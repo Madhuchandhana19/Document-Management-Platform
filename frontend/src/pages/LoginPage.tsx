@@ -200,25 +200,7 @@ export default function LoginPage({ onNavigate, onLoginSuccess }: Props) {
             </button>
           </form>
 
-          {/* 1-Click Quick Demo Role Switcher */}
-          <div className="mt-6 pt-5 border-t border-[#E2E8F0] space-y-2.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
-              <UserCheck size={14} className="text-[#2563EB]" /> 1-Click Seeded Accounts:
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {demoAccounts.map(acc => (
-                <button
-                  key={acc.role}
-                  type="button"
-                  onClick={() => handleQuickLogin(acc.email)}
-                  className="px-2.5 py-1.5 bg-white border border-[#E2E8F0] hover:border-[#2563EB] hover:bg-[#EFF6FF] rounded-lg text-left transition-all"
-                >
-                  <p className="text-[11px] font-bold text-[#0F172A]">{acc.role}</p>
-                  <p className="text-[9px] text-[#94A3B8] truncate">{acc.email}</p>
-                </button>
-              ))}
-            </div>
-          </div>
+
 
           <p className="text-center text-xs text-[#94A3B8] mt-6">
             {"Don't have an account? "}
