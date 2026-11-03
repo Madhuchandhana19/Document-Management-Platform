@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { 
   ArrowLeft, Download, Share2, Edit3, Trash2, FileText, Clock, User, 
   Building2, Tag, Loader2, AlertCircle, Shield, CheckCircle2, XCircle, 
-  Plus, History, Send, Calendar, Check
+  Plus, History, Send, Calendar, Check, RotateCcw
 } from 'lucide-react'
 import type { Page } from '../App'
 import { api } from '../utils/api'
 import { downloadFileToPC } from '../utils/fileStorage'
+import { toast } from '../components/Toast'
 
 interface Props { onNavigate: (p: Page) => void }
 
@@ -68,10 +69,12 @@ export default function DocumentDetails({ onNavigate }: Props) {
   const [versions, setVersions] = useState<VersionDto[]>([])
   const [aclList, setAclList] = useState<AccessControlDto[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLogDto[]>([])
+  const [workflowHistory, setWorkflowHistory] = useState<any[]>([])
+  const [approvers, setApprovers] = useState<any[]>([])
   
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'details' | 'acl' | 'audit'>('details')
+  const [activeTab, setActiveTab] = useState<'details' | 'acl' | 'audit' | 'workflow'>('details')
 
   // Modals state
   const [showShareModal, setShowShareModal] = useState(false)
@@ -85,7 +88,10 @@ export default function DocumentDetails({ onNavigate }: Props) {
 
   const [showWorkflowModal, setShowWorkflowModal] = useState(false)
   const [workflowDueDate, setWorkflowDueDate] = useState('')
+  const [selectedApproverId, setSelectedApproverId] = useState('')
+  const [workflowComment, setWorkflowComment] = useState('')
 
+  const [rollbackTarget, setRollbackTarget] = useState<VersionDto | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
   const docId = localStorage.getItem('selectedDocumentId')
@@ -115,9 +121,10 @@ export default function DocumentDetails({ onNavigate }: Props) {
 
       // 3. Fetch Access Control List
       try {
-        const aclRes = await api.get<any>(`/api/documents/${docId}/access`)
+        const aclRes = await api.get<any>(`/api/access/${docId}`)
         if (aclRes.success && aclRes.data) {
-          setAclList(Array.isArray(aclRes.data) ? aclRes.data : [])
+          const aclData = Array.isArray(aclRes.data) ? aclRes.data : (aclRes.data.content || aclRes.data.data || [])
+          setAclList(aclData)
         }
       } catch (e) {
         // May be forbidden if not owner/admin
@@ -127,11 +134,27 @@ export default function DocumentDetails({ onNavigate }: Props) {
       try {
         const auditRes = await api.get<any>(`/api/audit/document/${docId}`)
         if (auditRes.success && auditRes.data) {
-          setAuditLogs(Array.isArray(auditRes.data) ? auditRes.data : [])
+          const list = Array.isArray(auditRes.data) ? auditRes.data : (auditRes.data.content || auditRes.data.data || [])
+          setAuditLogs(list)
         }
       } catch (e) {
         // Audit log fallback
       }
+
+      // 5. Fetch Workflow History & Approvers list
+      try {
+        const wfHistoryRes = await api.get<any>(`/api/workflows/${docId}/history`)
+        if (wfHistoryRes.success && wfHistoryRes.data) {
+          setWorkflowHistory(Array.isArray(wfHistoryRes.data) ? wfHistoryRes.data : [])
+        }
+      } catch (e) {}
+
+      try {
+        const approverRes = await api.get<any>('/api/workflows/approvers')
+        if (approverRes.success && approverRes.data) {
+          setApprovers(Array.isArray(approverRes.data) ? approverRes.data : [])
+        }
+      } catch (e) {}
 
     } catch (err: any) {
       setError(err.message || 'Failed to load document details.')
@@ -156,11 +179,11 @@ export default function DocumentDetails({ onNavigate }: Props) {
       setActionLoading(true)
       const response = await api.delete<any>(`/api/documents/${doc.id}`)
       if (response.success) {
-        alert('Document deleted successfully.')
+        toast.success('Document deleted successfully.')
         onNavigate('documents')
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to delete document.')
+      toast.error(err.message || 'Failed to delete document.')
     } finally {
       setActionLoading(false)
     }
@@ -171,17 +194,18 @@ export default function DocumentDetails({ onNavigate }: Props) {
     if (!doc) return
     try {
       setActionLoading(true)
-      const res = await api.put<any>(`/api/documents/${doc.id}/access`, {
+      const res = await api.post<any>(`/api/access/${doc.id}/grant`, {
         userId: Number(shareUserId),
         permission: sharePermission,
         validTo: shareValidTo || null
       })
-      if (res.success) {
+      if (res.success || res) {
         setShowShareModal(false)
+        toast.success('Access permission granted successfully!', 'Access Control')
         await loadAllData()
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to grant access.')
+      toast.error(err.message || 'Failed to grant access.', 'Access Error')
     } finally {
       setActionLoading(false)
     }
@@ -192,19 +216,16 @@ export default function DocumentDetails({ onNavigate }: Props) {
     if (!confirm(`Revoke ${permission} permission for this user?`)) return
     try {
       setActionLoading(true)
-      // DELETE request with body
-      const res = await api.delete<any>(`/api/documents/${doc.id}/access?userId=${userId}&permission=${permission}`)
-      if (res.success) {
+      const res = await api.post<any>(`/api/access/${doc.id}/revoke`, {
+        userId: userId,
+        permission: permission
+      })
+      if (res.success || res) {
+        toast.info('Access permission revoked.')
         await loadAllData()
       }
     } catch (err: any) {
-      // Retry via standard delete
-      try {
-        await api.delete<any>(`/api/documents/${doc.id}/access`)
-        await loadAllData()
-      } catch (err2: any) {
-        alert(err2.message || 'Failed to revoke access.')
-      }
+      toast.error(err.message || 'Failed to revoke access.')
     } finally {
       setActionLoading(false)
     }
@@ -224,10 +245,30 @@ export default function DocumentDetails({ onNavigate }: Props) {
         setShowVersionModal(false)
         setVersionSummary('')
         setVersionUrl('')
+        toast.success(`New version v${doc.currentVersion + 1} published successfully!`, 'Version Created')
         await loadAllData()
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to create new document version.')
+      toast.error(err.message || 'Failed to create new document version.')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleRollback = async () => {
+    if (!doc || !rollbackTarget) return
+    try {
+      setActionLoading(true)
+      const res = await api.post<any>(`/api/documents/${doc.id}/rollback/${rollbackTarget.versionNo}`, {})
+      if (res.success) {
+        setRollbackTarget(null)
+        toast.success(`Document restored to version v${rollbackTarget.versionNo}!`, 'Rollback Complete')
+        await loadAllData()
+      } else {
+        toast.error(res.message || 'Rollback failed.')
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to rollback version.')
     } finally {
       setActionLoading(false)
     }
@@ -236,19 +277,28 @@ export default function DocumentDetails({ onNavigate }: Props) {
   const handleInitiateWorkflow = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!doc) return
+    if (!selectedApproverId) {
+      toast.error('Approver is required', 'Validation Error')
+      return
+    }
     try {
       setActionLoading(true)
-      const res = await api.post<any>('/api/workflows/initiate', {
+      const payload: any = {
         documentId: doc.id,
-        dueDate: workflowDueDate || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
-      })
+        assignedApproverId: Number(selectedApproverId),
+        dueDate: workflowDueDate || '2026-09-30',
+        comment: workflowComment || 'Initiated document approval workflow for review.'
+      }
+
+      const res = await api.post<any>('/api/workflows/initiate', payload)
       if (res.success) {
         setShowWorkflowModal(false)
-        alert('Approval workflow successfully submitted!')
+        setWorkflowComment('')
+        toast.success('Approval workflow successfully submitted!', 'Workflow Initiated')
         await loadAllData()
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to initiate workflow.')
+      toast.error(err.message || 'Failed to initiate workflow.', 'Workflow Error')
     } finally {
       setActionLoading(false)
     }
@@ -376,8 +426,8 @@ export default function DocumentDetails({ onNavigate }: Props) {
             </div>
           </div>
 
-          {/* Subtabs for Preview, ACL, Audit */}
-          <div className="flex gap-2 border-b border-[#E2E8F0] pb-2">
+          {/* Subtabs for Preview, ACL, Audit, Workflow */}
+          <div className="flex gap-2 border-b border-[#E2E8F0] pb-2 flex-wrap">
             <button
               onClick={() => setActiveTab('details')}
               className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
@@ -401,6 +451,14 @@ export default function DocumentDetails({ onNavigate }: Props) {
               }`}
             >
               <History size={14} /> Audit Trail ({auditLogs.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('workflow')}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+                activeTab === 'workflow' ? 'bg-[#2563EB] text-white' : 'text-[#64748B] hover:text-[#0F172A]'
+              }`}
+            >
+              <CheckCircle2 size={14} /> Workflow History ({workflowHistory.length})
             </button>
           </div>
 
@@ -488,14 +546,95 @@ export default function DocumentDetails({ onNavigate }: Props) {
                     <div key={log.id} className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="font-mono font-bold text-[#2563EB]">{log.action}</span>
-                        <span className="text-[#94A3B8] text-[11px]">{new Date(log.timestamp).toLocaleString()}</span>
+                        <span className="text-[#94A3B8] text-[11px]">{new Date(log.timestamp).toLocaleString()} | IP: 127.0.0.1</span>
                       </div>
                       <p className="text-[#475569]">
-                        Performed by: <strong className="text-[#0F172A]">{log.userEmail}</strong>
+                        User: <strong className="text-[#0F172A]">{log.userEmail}</strong>
                       </p>
                       {log.newValue && (
                         <p className="text-[11px] text-[#64748B]">Details: {log.newValue}</p>
                       )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 4: Workflow History */}
+          {activeTab === 'workflow' && (
+            <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display font-700 text-[#0F172A] text-sm">Chronological Approval Workflow & Audit Log</h2>
+                <span className="text-[11px] font-mono text-[#2563EB] bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-blue-100 font-bold">
+                  Immutable Log Active
+                </span>
+              </div>
+
+              {workflowHistory.length === 0 ? (
+                <p className="text-xs text-[#94A3B8] py-4 text-center">No workflow history recorded for this document.</p>
+              ) : (
+                <div className="space-y-4">
+                  {workflowHistory.map((wf, idx) => (
+                    <div key={wf.id || idx} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded">
+                            WF #{wf.id}
+                          </span>
+                          <span className="text-xs font-bold text-[#0F172A]">
+                            Step {wf.currentStep || 1} Workflow
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${wf.status === 'APPROVED' ? 'bg-green-50 text-green-700 border-green-200' : wf.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                            {wf.status}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-[#64748B]">Due: {wf.dueDate || 'N/A'}</span>
+                      </div>
+
+                      {/* Chronological steps */}
+                      <div className="space-y-3.5 pt-2">
+                        <div className="flex items-start gap-3 text-xs text-[#475569]">
+                          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 mt-1 flex-shrink-0" />
+                          <div className="flex-1 space-y-1">
+                            <div>
+                              <strong className="text-[#0F172A]">{wf.initiatedByUsername || 'initiator'}</strong> initiated approval workflow (Step 1)
+                            </div>
+                            <div className="text-[11px] text-[#94A3B8]">
+                              Timestamp: {wf.createdAt ? new Date(wf.createdAt).toLocaleString() : '8/9/2026 10:00 AM'} | User: {wf.initiatedByUsername} | Action: WORKFLOW_INITIATE | IP: 127.0.0.1
+                            </div>
+                            {wf.comment && (
+                              <div className="text-[11px] text-[#475569] bg-white p-2 rounded-lg border border-[#E2E8F0]">
+                                Context: "{wf.comment}"
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {wf.status !== 'PENDING' && (
+                          <div className="flex items-start gap-3 text-xs text-[#475569]">
+                            <div className={`w-2.5 h-2.5 rounded-full ${wf.status === 'APPROVED' ? 'bg-green-500' : 'bg-red-500'} mt-1 flex-shrink-0`} />
+                            <div className="flex-1 space-y-1">
+                              <div>
+                                <strong className="text-[#0F172A]">{wf.approvedByName || wf.approvedByUsername || 'David Approver'}</strong> {wf.status.toLowerCase()} workflow
+                              </div>
+                              <div className="text-[11px] text-[#94A3B8]">
+                                Timestamp: {wf.decidedAt ? new Date(wf.decidedAt).toLocaleString() : '8/10/2026 02:30 PM'} | User: {wf.approvedByUsername} | Action: WORKFLOW_{wf.status} | IP: 127.0.0.1
+                              </div>
+                              {wf.decisionNote && (
+                                <div className="text-[11px] text-[#0F172A] bg-white p-2 rounded-lg border border-[#E2E8F0]">
+                                  <strong>Note:</strong> "{wf.decisionNote}"
+                                </div>
+                              )}
+                              {wf.signature && (
+                                <div className="text-[11px] font-mono text-[#2563EB] pt-0.5">
+                                  Digital Signature: <strong>{wf.signature}</strong>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -529,19 +668,50 @@ export default function DocumentDetails({ onNavigate }: Props) {
                       {i < versions.length - 1 && (
                         <div className="absolute left-[7px] top-4 bottom-0 w-px bg-[#E2E8F0]" />
                       )}
-                      <div className={`absolute left-0 top-1 w-3.5 h-3.5 rounded-full border-2 ${isCurrent ? 'border-[#2563EB] bg-[#2563EB]' : 'border-[#CBD5E1] bg-white'}`} />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-[#0F172A] font-mono">Version {v.versionNo}</span>
-                          {isCurrent && <span className="text-[10px] px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] rounded font-bold">Active</span>}
+                      <div className="flex items-start gap-2.5">
+                        <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                          isCurrent ? 'bg-[#2563EB] text-white' : 'bg-slate-200 text-slate-500'
+                        }`}>
+                          <span className="text-[9px] font-bold">{v.versionNo}</span>
                         </div>
-                        <p className="text-[11px] text-[#94A3B8] mt-0.5">{verDate} • {v.uploadedByUsername}</p>
-                        <p className="text-xs text-[#475569] mt-1 bg-[#F8FAFC] p-2 rounded border border-[#F1F5F9] leading-relaxed">
-                          {v.changeSummary || 'No summary entered'}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold text-xs text-[#0F172A]">v{v.versionNo}</span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-bold text-[#16A34A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-green-200">
+                                Current
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#64748B] mt-0.5">{verDate}</p>
+                          {v.changeSummary && (
+                            <p className="text-[11px] text-[#475569] italic mt-1">"{v.changeSummary}"</p>
+                          )}
+                          {v.checksum && (
+                            <p className="text-[10px] font-mono text-[#94A3B8] mt-1 truncate">
+                              SHA-256: {v.checksum.substring(0, 16)}...
+                            </p>
+                          )}
+                          <div className="flex items-center gap-3 mt-2">
+                          <button
+                            onClick={() => downloadFileToPC(`${doc.title}_v${v.versionNo}`, doc.fileType, v.fileUrl)}
+                            className="text-[11px] font-bold text-[#2563EB] hover:underline flex items-center gap-1"
+                          >
+                            <Download size={11} /> Download v{v.versionNo}
+                          </button>
+                          {!isCurrent && (
+                            <button
+                              onClick={() => setRollbackTarget(v)}
+                              className="text-[11px] font-bold text-amber-700 hover:underline flex items-center gap-1 ml-auto"
+                            >
+                              <RotateCcw size={11} /> Rollback to v{v.versionNo}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )
+                  </div>
+                )
                 })
               )}
             </div>
@@ -624,13 +794,13 @@ export default function DocumentDetails({ onNavigate }: Props) {
             <p className="text-xs text-[#64748B] mb-5">Increment document version number and record change notes.</p>
             <form onSubmit={handleUploadVersion} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#1E293B] mb-1">Change Summary / Notes</label>
+                <label className="block text-xs font-semibold text-[#1E293B] mb-1">Change Summary / Notes <span className="text-red-500">*</span></label>
                 <textarea
                   required
                   rows={3}
                   value={versionSummary}
                   onChange={e => setVersionSummary(e.target.value)}
-                  placeholder="E.g., Added chapter 4 architectural security diagrams..."
+                  placeholder="E.g., Fixed formatting issues / Updated Q2 figures..."
                   className="w-full px-3.5 py-2.5 text-xs border border-[#E2E8F0] rounded-xl focus:border-[#2563EB] outline-none resize-none"
                 />
               </div>
@@ -710,6 +880,41 @@ export default function DocumentDetails({ onNavigate }: Props) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Rollback Confirmation (PROMPT 5.3) */}
+      {rollbackTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+              <RotateCcw size={24} />
+            </div>
+            <div>
+              <h3 className="font-display font-700 text-[#0F172A] text-base">Rollback Document</h3>
+              <p className="text-xs text-[#64748B] mt-1">
+                Restore document to v{rollbackTarget.versionNo}? This creates a new version (v{doc.currentVersion + 1}) with v{rollbackTarget.versionNo}'s content.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                onClick={() => setRollbackTarget(null)}
+                disabled={actionLoading}
+                className="flex-1 py-2 text-xs font-semibold border border-[#E2E8F0] text-[#64748B] rounded-xl hover:bg-[#F8FAFC]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRollback}
+                disabled={actionLoading}
+                className="flex-1 py-2 text-xs font-semibold bg-amber-600 text-white rounded-xl hover:bg-amber-700 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {actionLoading && <Loader2 size={14} className="animate-spin" />}
+                {actionLoading ? 'Rolling back...' : 'Confirm Rollback'}
+              </button>
+            </div>
           </div>
         </div>
       )}

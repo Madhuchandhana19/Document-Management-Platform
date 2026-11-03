@@ -21,17 +21,42 @@ public class DocumentDTOs {
 
         private Long folderId;
 
-        @NotBlank(message = "File type is required")
+        @com.fasterxml.jackson.annotation.JsonAlias({"ownerId", "owner_id"})
+        private Long ownerId;
+
         private String fileType;
 
-        @NotNull(message = "File size is required")
-        @Max(value = 50000, message = "File size must not exceed 50 MB")
         private Integer fileSizeKb;
 
-        @NotBlank(message = "Storage URL is required")
+        @NotBlank(message = "File is required")
+        @com.fasterxml.jackson.annotation.JsonAlias({"file", "storageUrl"})
         private String storageUrl;
 
         private String changeSummary;
+
+        @NotBlank(message = "Category is required")
+        private String category;
+
+        private String accessLevel;
+
+        @NotNull(message = "Retention Period is required")
+        @com.fasterxml.jackson.annotation.JsonAlias({"retentionPeriod", "retentionPeriodYears"})
+        private Integer retentionPeriodYears;
+
+        private java.time.LocalDate retentionDate;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class DocumentMetadataUpdateRequest {
+        @NotBlank(message = "Title is required")
+        private String title;
+        private String category;
+        private String accessLevel;
+        private Integer retentionPeriodYears;
     }
 
     @Getter
@@ -44,6 +69,7 @@ public class DocumentDTOs {
         private String fileType;
 
         @NotBlank(message = "Storage URL is required")
+        @com.fasterxml.jackson.annotation.JsonAlias({"file", "storageUrl"})
         private String storageUrl;
 
         @NotBlank(message = "Change summary is required")
@@ -65,6 +91,9 @@ public class DocumentDTOs {
         private Integer fileSizeKb;
         private String storageUrl;
         private String status;
+        private String category;
+        private String accessLevel;
+        private Integer retentionPeriodYears;
         private LocalDate retentionDate;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
@@ -83,5 +112,18 @@ public class DocumentDTOs {
         private String changeSummary;
         private LocalDateTime createdAt;
         private String checksum;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class DocumentPaginatedResponse {
+        private java.util.List<DocumentResponse> documents;
+        private long totalCount;
+        private int currentPage;
+        private int pageSize;
+        private int totalPages;
     }
 }

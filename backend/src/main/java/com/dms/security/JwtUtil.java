@@ -76,6 +76,10 @@ public class JwtUtil {
         return extractClaim(token, Claims::getExpiration);
     }
 
+    public Date extractIssuedAt(String token) {
+        return extractClaim(token, Claims::getIssuedAt);
+    }
+
     private Boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }

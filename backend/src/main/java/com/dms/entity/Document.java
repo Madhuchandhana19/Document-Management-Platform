@@ -10,7 +10,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "document")
+@Table(name = "document", indexes = {
+    @Index(name = "idx_doc_title", columnList = "title"),
+    @Index(name = "idx_doc_category", columnList = "category"),
+    @Index(name = "idx_doc_owner_id", columnList = "owner_id"),
+    @Index(name = "idx_doc_status", columnList = "status")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,7 +27,7 @@ public class Document {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "title", nullable = false, length = 1000)
     private String title;
 
     @Column(name = "folder_id")
@@ -50,6 +55,18 @@ public class Document {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private DocumentStatus status = DocumentStatus.DRAFT;
+
+    @Builder.Default
+    @Column(length = 50)
+    private String category = "General";
+
+    @Builder.Default
+    @Column(name = "access_level", length = 30)
+    private String accessLevel = "Internal";
+
+    @Builder.Default
+    @Column(name = "retention_period_years")
+    private Integer retentionPeriodYears = 5;
 
     @Column(name = "retention_date")
     private LocalDate retentionDate;

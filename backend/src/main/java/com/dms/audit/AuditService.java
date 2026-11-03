@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 
+import org.springframework.scheduling.annotation.Async;
+
 @Service
 @RequiredArgsConstructor
 public class AuditService {
@@ -16,6 +18,7 @@ public class AuditService {
     private final UserRepository userRepository;
     private final AuditLogRepository auditLogRepository;
 
+    @Async
     public void log(String username, Document document, String action, String entityType,
             String entityId, String oldValue, String newValue, String ipAddress) {
 
@@ -37,5 +40,27 @@ public class AuditService {
                 .build();
 
         auditLogRepository.save(auditLog);
+    }
+
+    public AuditLog logWithTimestamp(String username, Document document, String action, String entityType,
+            String entityId, String oldValue, String newValue, String ipAddress, LocalDateTime timestamp) {
+        Users user = null;
+        if (username != null) {
+            user = userRepository.findByEmail(username).orElse(null);
+        }
+
+        AuditLog auditLog = AuditLog.builder()
+                .user(user)
+                .document(document)
+                .action(action)
+                .entityType(entityType)
+                .entityId(entityId)
+                .oldValue(oldValue)
+                .newValue(newValue)
+                .ipAddress(ipAddress)
+                .timestamp(timestamp)
+                .build();
+
+        return auditLogRepository.save(auditLog);
     }
 }

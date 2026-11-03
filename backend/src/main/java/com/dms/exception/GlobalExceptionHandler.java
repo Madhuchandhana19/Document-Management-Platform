@@ -35,9 +35,24 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage(), request);
     }
 
+    @ExceptionHandler(UserAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleUserAlreadyExistsException(UserAlreadyExistsException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(DuplicateWorkflowException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateWorkflowException(DuplicateWorkflowException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(UnauthorisedAccessException.class)
     public ResponseEntity<ErrorResponse> handleUnauthorisedAccessException(UnauthorisedAccessException ex, WebRequest request) {
         return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage() != null && !ex.getMessage().isEmpty() ? ex.getMessage() : "Access Denied", request);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -47,6 +62,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalStateException(IllegalStateException ex, WebRequest request) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }
 
@@ -67,10 +87,19 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex, WebRequest request) {
-        String errorMessage = ex.getBindingResult().getFieldErrors().stream()
+        java.util.List<String> errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
-                .collect(Collectors.joining(", "));
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, errorMessage, request);
+                .collect(Collectors.toList());
+        String errorMessage = String.join(", ", errors);
+        ErrorResponse errorResponse = new ErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                errorMessage,
+                request.getDescription(false).replace("uri=", ""),
+                errors
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
@@ -81,13 +110,51 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, errorMessage, request);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex, WebRequest request) {
+        String msg = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+        if (msg.contains("email") || msg.contains("users_email_key") || msg.contains("uk_")) {
+            return buildErrorResponse(HttpStatus.CONFLICT, "This email is already registered", request);
+        }
+        if (msg.contains("owner") || msg.contains("owner_id")) {
+            return buildErrorResponse(HttpStatus.BAD_REQUEST, "Document owner is required", request);
+        }
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Database constraint violation: " + ex.getRootCause().getMessage(), request);
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Invalid ID format: " + ex.getValue(), request);
+    }
+
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ErrorResponse> handleTooManyRequestsException(TooManyRequestsException ex, WebRequest request) {
         return buildErrorResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
     }
 
+    @ExceptionHandler({DatabaseUnavailableException.class, org.springframework.jdbc.CannotGetJdbcConnectionException.class})
+    public ResponseEntity<ErrorResponse> handleDatabaseUnavailableException(Exception ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, "Database temporarily unavailable. Please try again.", request);
+    }
+
+    @ExceptionHandler(StorageQuotaExceededException.class)
+    public ResponseEntity<ErrorResponse> handleStorageQuotaExceededException(StorageQuotaExceededException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(AuthServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleAuthServiceUnavailableException(AuthServiceUnavailableException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler({DeadlockException.class, org.springframework.dao.CannotAcquireLockException.class, org.springframework.dao.PessimisticLockingFailureException.class})
+    public ResponseEntity<ErrorResponse> handleDeadlockException(Exception ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, "Please retry your request", request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleAllUncaughtExceptions(Exception ex, WebRequest request) {
+        ex.printStackTrace();
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", request);
     }
 

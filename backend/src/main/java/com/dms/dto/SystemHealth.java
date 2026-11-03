@@ -17,5 +17,8 @@ public class SystemHealth {
     private Map<String, Long> documentsByStatus;
     private Long pendingWorkflows;
     private Long overdueWorkflows;
+    private String storageStatus;
+    private Double memoryUsagePercentage;
+    private String memoryAlert;
     private LocalDateTime timestamp;
 }

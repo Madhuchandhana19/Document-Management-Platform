@@ -62,7 +62,7 @@ public class AuthServiceTest {
                 .role("ADMIN")
                 .build();
 
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
         when(userRepository.existsByPhoneNumber(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("mockedHash");
         when(jwtUtil.generateToken(any(), anyString(), any(Role.class))).thenReturn("mockToken");
@@ -119,7 +119,7 @@ public class AuthServiceTest {
                 .role("ADMIN")
                 .build();
 
-        when(userRepository.existsByEmail("alice@dms.com")).thenReturn(true);
+        when(userRepository.existsByEmailIgnoreCase("alice@dms.com")).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> authService.register(req));
         verify(userRepository, never()).save(any(Users.class));

@@ -11,4 +11,5 @@ import java.util.Optional;
 public interface DocumentVersionRepository extends JpaRepository<DocumentVersion, Long> {
     List<DocumentVersion> findByDocumentIdOrderByVersionNoDesc(Long documentId);
     Optional<DocumentVersion> findByDocumentIdAndVersionNo(Long documentId, Integer versionNo);
+    boolean existsByChecksum(String checksum);
 }

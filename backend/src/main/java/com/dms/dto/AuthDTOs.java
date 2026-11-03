@@ -18,8 +18,9 @@ public class AuthDTOs {
         @Pattern(regexp = "^[A-Za-z ]{2,100}$", message = "Name must not contain numbers or special characters")
         private String name;
 
-        @NotBlank(message = "Phone Number is required")
+        @NotBlank(message = "Phone is required")
         @Pattern(regexp = "^\\d{10}$", message = "Phone Number must be exactly 10 digits long")
+        @com.fasterxml.jackson.annotation.JsonAlias({"phone", "phoneNumber"})
         private String phoneNumber;
 
         @NotBlank(message = "Email is required")
@@ -27,7 +28,6 @@ public class AuthDTOs {
         private String email;
 
         @NotBlank(message = "Password is required")
-        @Size(min = 8, message = "Password must meet security requirements")
         private String password;
 
         @NotBlank(message = "Role is required")
@@ -59,5 +59,32 @@ public class AuthDTOs {
         private String email;
         private String role;
         private Long userId;
+        private Long expiresIn;
+        private UserSummary user;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class UserSummary {
+        private Long id;
+        private String name;
+        private String email;
+        private String role;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ChangePasswordRequest {
+        @NotBlank(message = "Current password is required")
+        private String oldPassword;
+
+        @NotBlank(message = "New password is required")
+        private String newPassword;
     }
 }

@@ -86,9 +86,16 @@ export default function Notifications() {
           return (
             <div
               key={n.id}
-              onClick={() => !n.read && markAsRead(n.id)}
-              className={`relative flex items-start gap-4 p-4 rounded-2xl border transition-all ${
-                !n.read ? 'bg-white border-[#BFDBFE] shadow-sm cursor-pointer' : 'bg-white border-[#E2E8F0]'
+              onClick={() => {
+                if (!n.read) markAsRead(n.id);
+                if (n.type === 'APPROVAL' || n.type === 'WORKFLOW_ASSIGNED' || n.type === 'WORKFLOW_APPROVED' || n.type === 'WORKFLOW_REJECTED') {
+                  window.location.hash = 'approvals';
+                } else {
+                  window.location.hash = 'documents';
+                }
+              }}
+              className={`relative flex items-start gap-4 p-4 rounded-2xl border transition-all cursor-pointer hover:border-[#2563EB]/40 ${
+                !n.read ? 'bg-white border-[#BFDBFE] shadow-sm' : 'bg-white border-[#E2E8F0]'
               }`}
             >
               {!n.read && <div className="absolute top-4 left-4 w-2 h-2 rounded-full bg-[#2563EB] -translate-x-3" />}

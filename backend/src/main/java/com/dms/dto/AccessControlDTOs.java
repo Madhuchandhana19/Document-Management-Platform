@@ -15,8 +15,11 @@ public class AccessControlDTOs {
     @AllArgsConstructor
     @Builder
     public static class GrantAccessRequest {
-        @NotNull(message = "User ID is required")
+        @com.fasterxml.jackson.annotation.JsonAlias({"userId"})
         private Long userId;
+
+        @com.fasterxml.jackson.annotation.JsonAlias({"userEmail", "email"})
+        private String userEmail;
 
         @NotBlank(message = "Permission is required")
         private String permission;

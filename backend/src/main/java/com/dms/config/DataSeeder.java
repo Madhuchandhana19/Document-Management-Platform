@@ -113,6 +113,9 @@ public class DataSeeder implements CommandLineRunner {
                 .fileSizeKb(1250)
                 .storageUrl("https://storage.dms.com/files/arch.pdf")
                 .status(DocumentStatus.UNDER_REVIEW)
+                .category("Engineering")
+                .accessLevel("Internal")
+                .retentionPeriodYears(5)
                 .retentionDate(LocalDate.now().plusYears(5))
                 .build();
 
@@ -123,7 +126,10 @@ public class DataSeeder implements CommandLineRunner {
                 .fileSizeKb(450)
                 .storageUrl("https://storage.dms.com/files/q2_finance.xlsx")
                 .status(DocumentStatus.DRAFT)
-                .retentionDate(LocalDate.now().plusMonths(6))
+                .category("Finance")
+                .accessLevel("Private")
+                .retentionPeriodYears(7)
+                .retentionDate(LocalDate.now().plusYears(7))
                 .build();
 
         Document doc3 = Document.builder()
@@ -133,6 +139,9 @@ public class DataSeeder implements CommandLineRunner {
                 .fileSizeKb(2400)
                 .storageUrl("https://storage.dms.com/files/security_guidelines.docx")
                 .status(DocumentStatus.DRAFT)
+                .category("Legal")
+                .accessLevel("Public")
+                .retentionPeriodYears(10)
                 .retentionDate(LocalDate.now().plusYears(10))
                 .build();
 

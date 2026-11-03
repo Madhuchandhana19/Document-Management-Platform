@@ -18,18 +18,44 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  })
+  let response: Response | null = null
+  const maxRetries = 3
+  const delayMs = 200
 
-  if (response.status === 401 || response.status === 403) {
-    // Session expired or invalid, or unauthorized
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      response = await fetch(`${BASE_URL}${path}`, {
+        ...options,
+        headers,
+      })
+      if (response.status >= 502 && response.status <= 504 && attempt < maxRetries) {
+        await new Promise(res => setTimeout(res, delayMs * attempt))
+        continue
+      }
+      break
+    } catch (fetchErr: any) {
+      if (attempt < maxRetries) {
+        await new Promise(res => setTimeout(res, delayMs * attempt))
+      } else {
+        throw new Error('Server temporarily unavailable. Please try again.')
+      }
+    }
+  }
+
+  if (!response) {
+    throw new Error('Server temporarily unavailable. Please try again.')
+  }
+
+  if (response.status === 401) {
+    // Session expired or invalid
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
-    // Trigger redirect to login by reloading or dispatching event
-    window.dispatchEvent(new Event('auth-expired'))
+    sessionStorage.removeItem('currentPage')
+    // Trigger redirect to login by dispatching event with expiration detail
+    window.dispatchEvent(new CustomEvent('auth-expired', {
+      detail: { message: 'Session expired. Please log in again.' }
+    }))
   }
 
   if (response.status === 204) {

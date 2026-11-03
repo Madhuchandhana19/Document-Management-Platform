@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-import siteConfiguration from './.figma/make/site.json'
+import siteConfiguration from './.figma/make/site.json' with { type: 'json' }
 
 const isFigmaSandbox = process.env.FIGMA === '1' || process.env.FIGMA === 'true'
 

@@ -9,7 +9,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "approval_workflow")
+@Table(name = "approval_workflow", indexes = {
+    @Index(name = "idx_workflow_doc_id", columnList = "document_id"),
+    @Index(name = "idx_workflow_status", columnList = "status"),
+    @Index(name = "idx_workflow_assigned", columnList = "assigned_approver_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -47,6 +51,17 @@ public class ApprovalWorkflow {
     @JoinColumn(name = "approved_by")
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Users approvedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_approver_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private Users assignedApprover;
+
+    @Column(name = "comment", columnDefinition = "TEXT")
+    private String comment;
+
+    @Column(name = "signature", columnDefinition = "TEXT")
+    private String signature;
 
     @Column(name = "decision_note", columnDefinition = "TEXT")
     private String decisionNote;

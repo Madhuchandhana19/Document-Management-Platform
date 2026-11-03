@@ -59,9 +59,10 @@ public class RetentionService {
 
     @Scheduled(fixedDelay = 3600000) // Runs every hour
     @Transactional
-    public void autoArchiveExpiredDocuments() {
+    public int autoArchiveExpiredDocuments() {
         LocalDate today = LocalDate.now();
         List<Document> expiredDocs = documentRepository.findExpiredDocuments(today);
+        int archivedCount = 0;
 
         for (Document d : expiredDocs) {
             d.setStatus(DocumentStatus.ARCHIVED);
@@ -70,8 +71,9 @@ public class RetentionService {
             auditService.log("system", d, "AUTO_ARCHIVE", "Document",
                     d.getId().toString(), "EXPIRED", "Automatically archived based on retention date policy", "system");
 
-            // TODO: Wire up notification dispatch here (e.g. alert owner about the auto-archived document)
+            archivedCount++;
         }
+        return archivedCount;
     }
 
     private DocumentResponse toResponse(Document d) {

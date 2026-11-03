@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { FileText, Eye, EyeOff, Mail, Lock, ArrowLeft, AlertCircle, Loader2, ShieldCheck, UserCheck } from 'lucide-react'
 import type { Page, UserProfile } from '../App'
 import { api } from '../utils/api'
+import { toast } from '../components/Toast'
 
 interface Props {
   onNavigate: (p: Page) => void
   onLoginSuccess: (profile: UserProfile) => void
+  sessionNotice?: string | null
 }
 
 const demoAccounts = [
@@ -18,7 +20,7 @@ const demoAccounts = [
   { role: 'Guest', email: 'guest@dms.com', color: '#64748B' },
 ]
 
-export default function LoginPage({ onNavigate, onLoginSuccess }: Props) {
+export default function LoginPage({ onNavigate, onLoginSuccess, sessionNotice }: Props) {
   const [showPw, setShowPw] = useState(false)
   const [remember, setRemember] = useState(true)
   const [email, setEmail] = useState('')
@@ -33,7 +35,9 @@ export default function LoginPage({ onNavigate, onLoginSuccess }: Props) {
     const loginPw = targetPw || password
 
     if (!loginEmail || !loginPw) {
-      setError('Please enter both email and password.')
+      const msg = 'Please enter both email and password.'
+      setError(msg)
+      toast.warning(msg, 'Missing Credentials')
       return
     }
     setError(null)
@@ -54,12 +58,17 @@ export default function LoginPage({ onNavigate, onLoginSuccess }: Props) {
           roles: ["ROLE_" + role] 
         }
         localStorage.setItem('user', JSON.stringify(profile))
+        toast.success(`Welcome back, ${name || resEmail}!`, 'Login Successful')
         onLoginSuccess(profile)
       } else {
-        setError('Login failed. Please check credentials.')
+        const msg = 'Login failed. Please check credentials.'
+        setError(msg)
+        toast.error(msg, 'Authentication Error')
       }
     } catch (err: any) {
-      setError(err.message || 'Connection error. Please ensure backend is reachable on port 8080.')
+      const msg = err.message || 'Connection error. Please ensure backend is reachable on port 8080.'
+      setError(msg)
+      toast.error(msg, 'Authentication Failed')
     } finally {
       setLoading(false)
     }
@@ -141,53 +150,83 @@ export default function LoginPage({ onNavigate, onLoginSuccess }: Props) {
             </p>
           </div>
 
+          {sessionNotice && (
+            <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2.5 p-3.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs leading-relaxed animate-in fade-in">
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-amber-600" aria-hidden="true" />
+              <span className="font-semibold">{sessionNotice}</span>
+            </div>
+          )}
+
           {error && (
-            <div className="mb-5 flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs leading-relaxed animate-in fade-in">
-              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+            <div id="login-error" role="alert" aria-live="polite" className="mb-5 flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs leading-relaxed animate-in fade-in">
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
-              <label className="block text-xs font-bold text-[#1E293B] mb-1.5 uppercase tracking-wider">
-                Email Address
+              <label htmlFor="email" className="block text-xs font-bold text-[#1E293B] mb-1.5 uppercase tracking-wider">
+                Email Address <span className="text-red-500" aria-hidden="true">*</span>
               </label>
               <div className="relative">
-                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#64748B]" aria-hidden="true" />
                 <input
+                  id="email"
                   type="email"
                   required
+                  aria-required="true"
+                  aria-describedby={error ? "login-error" : undefined}
                   value={email}
                   onChange={e => setEmail(e.target.value)}
+                  autoComplete="off"
                   placeholder="admin@dms.com"
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all shadow-sm"
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-xs text-[#0F172A] placeholder:text-[#64748B] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all shadow-sm"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#1E293B] mb-1.5 uppercase tracking-wider">
-                Password
+              <label htmlFor="password" className="block text-xs font-bold text-[#1E293B] mb-1.5 uppercase tracking-wider">
+                Password <span className="text-red-500" aria-hidden="true">*</span>
               </label>
               <div className="relative">
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#64748B]" aria-hidden="true" />
                 <input
+                  id="password"
                   type={showPw ? 'text' : 'password'}
                   required
+                  aria-required="true"
+                  aria-describedby={error ? "login-error" : undefined}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
+                  autoComplete="off"
                   placeholder="••••••••••••"
-                  className="w-full pl-10 pr-10 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all shadow-sm"
+                  className="w-full pl-10 pr-10 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-xs text-[#0F172A] placeholder:text-[#64748B] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all shadow-sm"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw(v => !v)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                  aria-label={showPw ? "Hide password" : "Show password"}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#1E293B] transition-colors p-1"
                 >
-                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showPw ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs py-1">
+              <label className="flex items-center gap-2 cursor-pointer text-[#475569]">
+                <input
+                  id="show-pw-checkbox"
+                  type="checkbox"
+                  checked={showPw}
+                  onChange={e => setShowPw(e.target.checked)}
+                  aria-label="Show Password"
+                  className="rounded border-[#CBD5E1] text-[#2563EB] focus:ring-[#2563EB] w-4 h-4"
+                />
+                <span>Show Password</span>
+              </label>
             </div>
 
             <button
@@ -195,14 +234,12 @@ export default function LoginPage({ onNavigate, onLoginSuccess }: Props) {
               disabled={loading}
               className="w-full py-3 bg-[#2563EB] text-white font-bold text-xs rounded-xl hover:bg-[#1D4ED8] transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-75"
             >
-              {loading && <Loader2 size={15} className="animate-spin" />}
+              {loading && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}
               {loading ? 'Authenticating...' : 'Sign In to Workspace'}
             </button>
           </form>
 
-
-
-          <p className="text-center text-xs text-[#94A3B8] mt-6">
+          <p className="text-center text-xs text-[#64748B] mt-6">
             {"Don't have an account? "}
             <button onClick={() => onNavigate('register')} className="text-[#2563EB] hover:text-[#1D4ED8] font-bold transition-colors">
               Create Account

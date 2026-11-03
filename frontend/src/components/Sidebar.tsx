@@ -13,7 +13,15 @@ interface Props {
   onLogout: () => void
 }
 
-const nav = [
+interface NavItem {
+  icon: any
+  label: string
+  page: Page
+  badge?: string | number
+  dynamicBadge?: boolean
+}
+
+const nav: NavItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', page: 'dashboard' as Page },
   { icon: FileText, label: 'My Documents', page: 'documents' as Page },
   { icon: Share2, label: 'Shared Workspace', page: 'workspace' as Page },
@@ -78,20 +86,22 @@ export default function Sidebar({ current, onNavigate, collapsed, user, onLogout
       )}
 
       {/* Nav links */}
-      <nav className="flex-1 px-2.5 py-2 space-y-0.5 sidebar-scroll overflow-y-auto">
+      <nav aria-label="Sidebar navigation" className="flex-1 px-2.5 py-2 space-y-0.5 sidebar-scroll overflow-y-auto">
         {nav.map(item => {
           const active = current === item.page
           return (
             <button
               key={item.label}
               onClick={() => onNavigate(item.page)}
+              aria-current={active ? 'page' : undefined}
+              aria-label={item.label}
               title={collapsed ? item.label : undefined}
               className={`w-full flex items-center gap-3 rounded-xl text-sm transition-all duration-150 group relative ${
                 collapsed ? 'justify-center px-0 py-3' : 'px-3 py-2.5'
               } ${
                 active
                   ? 'bg-[#2563EB] text-white shadow-lg shadow-blue-500/20'
-                  : 'text-[#64748B] hover:bg-white/8 hover:text-[#CBD5E1]'
+                  : 'text-[#94A3B8] hover:bg-white/8 hover:text-[#FFFFFF]'
               }`}
             >
               {/* Active left bar */}
@@ -99,7 +109,7 @@ export default function Sidebar({ current, onNavigate, collapsed, user, onLogout
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-white rounded-r-full -ml-2.5" />
               )}
 
-              <item.icon size={17} className="flex-shrink-0" />
+              <item.icon size={17} className="flex-shrink-0" aria-hidden="true" />
 
               {!collapsed && (
                 <>
@@ -109,7 +119,7 @@ export default function Sidebar({ current, onNavigate, collapsed, user, onLogout
                       {item.dynamicBadge ? notifCount : item.badge}
                     </span>
                   )}
-                  {active && <ChevronRight size={13} className="opacity-60" />}
+                  {active && <ChevronRight size={13} className="opacity-60" aria-hidden="true" />}
                 </>
               )}
 
@@ -123,16 +133,17 @@ export default function Sidebar({ current, onNavigate, collapsed, user, onLogout
       </nav>
 
       {/* Divider */}
-      <div className="mx-3 border-t border-white/10" />
+      <div className="mx-3 border-t border-white/10" aria-hidden="true" />
 
       {/* Logout */}
       <div className={`px-2.5 py-3 flex-shrink-0`}>
         <button
           onClick={onLogout}
+          aria-label="Logout"
           title={collapsed ? 'Logout' : undefined}
-          className={`w-full flex items-center gap-3 rounded-xl text-sm text-[#475569] hover:bg-[#EF4444]/10 hover:text-[#F87171] transition-all py-2.5 ${collapsed ? 'justify-center px-0' : 'px-3'}`}
+          className={`w-full flex items-center gap-3 rounded-xl text-sm text-[#94A3B8] hover:bg-[#EF4444]/10 hover:text-[#F87171] transition-all py-2.5 ${collapsed ? 'justify-center px-0' : 'px-3'}`}
         >
-          <LogOut size={17} className="flex-shrink-0" />
+          <LogOut size={17} className="flex-shrink-0" aria-hidden="true" />
           {!collapsed && <span className="font-500">Logout</span>}
         </button>
       </div>

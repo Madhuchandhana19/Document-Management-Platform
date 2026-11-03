@@ -1,5 +1,7 @@
 package com.dms.security;
 
+import com.dms.entity.Users;
+import com.dms.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,16 +15,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Date;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
+    private final UserRepository userRepository;
 
-    public JwtAuthFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
+    public JwtAuthFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService, UserRepository userRepository) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -49,6 +54,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
             if (jwtUtil.validateToken(jwt, userDetails.getUsername())) {
+                // Check if user changed password after this token was issued
+                Users user = userRepository.findByEmail(userEmail).orElse(null);
+                if (user != null && user.getPasswordChangedAt() != null) {
+                    Date issuedAt = jwtUtil.extractIssuedAt(jwt);
+                    long passwordChangedMs = java.sql.Timestamp.valueOf(user.getPasswordChangedAt()).getTime();
+                    if (issuedAt != null && issuedAt.getTime() <= passwordChangedMs + 1000L) {
+                        // Token issued prior to or at password change -> reject!
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+                }
+
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,

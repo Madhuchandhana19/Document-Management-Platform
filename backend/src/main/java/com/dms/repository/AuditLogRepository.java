@@ -14,6 +14,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     Page<AuditLog> findByUserId(Long userId, Pageable pageable);
     Page<AuditLog> findByEntityType(String entityType, Pageable pageable);
     Page<AuditLog> findByDocument_Id(Long documentId, Pageable pageable);
+    Page<AuditLog> findByTimestampBetween(java.time.LocalDateTime start, java.time.LocalDateTime end, Pageable pageable);
+    Page<AuditLog> findByDocument_IdAndTimestampBetween(Long documentId, java.time.LocalDateTime start, java.time.LocalDateTime end, Pageable pageable);
 
     @Query(value = "SELECT * FROM audit_log ORDER BY id DESC LIMIT 1", nativeQuery = true)
     Optional<AuditLog> findLatestEntry();

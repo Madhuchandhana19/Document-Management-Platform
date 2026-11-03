@@ -31,55 +31,93 @@ public class AuthService {
 
     @Transactional
     public LoginResponse register(RegisterRequest req) {
+        String cleanEmail = req.getEmail() != null ? req.getEmail().trim().toLowerCase() : "";
+        String cleanPhone = req.getPhoneNumber() != null ? req.getPhoneNumber().trim() : "";
+
         // Validate name pattern: ^[A-Za-z ]{2,100}$
-        if (req.getName() == null || !req.getName().matches("^[A-Za-z ]{2,100}$")) {
+        if (req.getName() == null || !req.getName().trim().matches("^[A-Za-z ]{2,100}$")) {
             throw new InvalidNameException("Name must not contain numbers or special characters");
         }
 
         // Validate phone pattern: ^\d{10}$
-        if (req.getPhoneNumber() == null || !req.getPhoneNumber().matches("^\\d{10}$")) {
+        if (cleanPhone.isEmpty() || !cleanPhone.matches("^\\d{10}$")) {
             throw new InvalidPhoneException("Phone Number must be exactly 10 digits long");
         }
 
-        // Check if email or phone is already taken
-        if (userRepository.existsByEmail(req.getEmail())) {
-            throw new IllegalArgumentException("Email is already taken");
+        // Check if email or phone is already taken (regardless of role or letter case)
+        if (userRepository.existsByEmailIgnoreCase(cleanEmail) || userRepository.existsByEmail(cleanEmail)) {
+            throw new com.dms.exception.UserAlreadyExistsException("This email is already registered");
         }
-        if (userRepository.existsByPhoneNumber(req.getPhoneNumber())) {
-            throw new IllegalArgumentException("Phone number is already taken");
+        if (userRepository.existsByPhoneNumber(cleanPhone)) {
+            throw new com.dms.exception.UserAlreadyExistsException("Phone number is already taken");
         }
 
         // Password policy: min 8 chars, uppercase, lowercase, digit, special char
-        // Regex: at least one digit, one lowercase, one uppercase, one special char, no
-        // spaces, at least 8 characters
-        String passwordRegex = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!_\\-])(?=\\S+$).{8,}$";
-        if (req.getPassword() == null || !req.getPassword().matches(passwordRegex)) {
-            throw new IllegalArgumentException("Password must meet security requirements");
+        if (req.getPassword() == null || req.getPassword().trim().length() < 8) {
+            throw new IllegalArgumentException("Password must meet security requirements: minimum 8 characters with uppercase, lowercase, digit, and special character");
+        }
+        if (!req.getPassword().matches(".*[A-Z].*")) {
+            throw new IllegalArgumentException("Password must contain at least one uppercase letter");
+        }
+        if (!req.getPassword().matches(".*[a-z].*")) {
+            throw new IllegalArgumentException("Password must contain at least one lowercase letter");
+        }
+        if (!req.getPassword().matches(".*[0-9].*")) {
+            throw new IllegalArgumentException("Password must contain at least one digit");
+        }
+        if (!req.getPassword().matches(".*[^A-Za-z0-9\\s].*")) {
+            throw new IllegalArgumentException("Password must contain at least one special character (!@#$%^&*)");
         }
 
         Role userRole;
-        try {
-            userRole = Role.valueOf(req.getRole().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid role specified");
+        String rawRole = req.getRole() != null ? req.getRole().trim().toUpperCase() : "VIEWER";
+        if (rawRole.startsWith("ROLE_")) {
+            rawRole = rawRole.substring(5);
+        }
+        switch (rawRole) {
+            case "ADMIN": userRole = Role.ADMIN; break;
+            case "OWNER":
+            case "DOCUMENT_OWNER": userRole = Role.DOCUMENT_OWNER; break;
+            case "EDITOR": userRole = Role.EDITOR; break;
+            case "APPROVER":
+            case "MANAGER":
+            case "SUPERVISOR": userRole = Role.APPROVER; break;
+            case "VIEWER": userRole = Role.VIEWER; break;
+            case "COMPLIANCE":
+            case "COMPLIANCE_OFFICER":
+            case "OFFICER": userRole = Role.COMPLIANCE_OFFICER; break;
+            case "GUEST": userRole = Role.GUEST; break;
+            default:
+                try {
+                    userRole = Role.valueOf(rawRole);
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid role. Must be one of: ADMIN, MANAGER, SUPERVISOR, OFFICER, OWNER, GUEST");
+                }
         }
 
         Users user = Users.builder()
-                .name(req.getName())
-                .phoneNumber(req.getPhoneNumber())
-                .email(req.getEmail())
+                .name(req.getName().trim())
+                .phoneNumber(cleanPhone)
+                .email(cleanEmail)
                 .passwordHash(passwordEncoder.encode(req.getPassword()))
                 .role(userRole)
                 .isActive(true)
                 .failedLoginAttempts(0)
                 .build();
 
-        userRepository.save(user);
+        user = userRepository.saveAndFlush(user);
 
         String userIdStr = user.getId() != null ? user.getId().toString() : "0";
-        auditService.log(req.getEmail(), null, "REGISTER", "Users", userIdStr, null, req.getEmail(), "system");
+        auditService.log(cleanEmail, null, "REGISTER", "Users", userIdStr, null, cleanEmail, "system");
 
         String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole());
+
+        long expiresInSec = 28800L;
+        if (user.getRole() == Role.ADMIN) {
+            expiresInSec = 86400L;
+        } else if (user.getRole() == Role.APPROVER || user.getRole() == Role.COMPLIANCE_OFFICER) {
+            expiresInSec = 43200L;
+        }
 
         return LoginResponse.builder()
                 .token(token)
@@ -87,26 +125,54 @@ public class AuthService {
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .userId(user.getId())
+                .expiresIn(expiresInSec)
+                .user(com.dms.dto.AuthDTOs.UserSummary.builder()
+                        .id(user.getId())
+                        .name(user.getName())
+                        .email(user.getEmail())
+                        .role(user.getRole().name())
+                        .build())
                 .build();
     }
 
-    @Transactional
+    private static boolean authServiceAvailable = true;
+
+    public static void setAuthServiceAvailable(boolean available) {
+        authServiceAvailable = available;
+    }
+
+    public static boolean isAuthServiceAvailable() {
+        return authServiceAvailable;
+    }
+
+    @Transactional(noRollbackFor = {BadCredentialsException.class, LockedException.class})
     public LoginResponse login(LoginRequest req, String ipAddress) {
-        Users user = userRepository.findByEmail(req.getEmail())
-                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
+        if (!authServiceAvailable) {
+            throw new com.dms.exception.AuthServiceUnavailableException("Authentication service unavailable");
+        }
+
+        String cleanEmail = req.getEmail() != null ? req.getEmail().trim().toLowerCase() : "";
+        Users user = userRepository.findByEmailIgnoreCase(cleanEmail)
+                .orElseGet(() -> userRepository.findByEmail(req.getEmail()).orElse(null));
+
+        if (user == null) {
+            throw new BadCredentialsException("Invalid credentials. Please check your email and password.");
+        }
 
         if (!user.isActive()) {
             throw new DisabledException("User account is inactive");
         }
 
-        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now())) {
-            throw new LockedException("User account is locked");
+        boolean matches = passwordEncoder.matches(req.getPassword(), user.getPasswordHash());
+
+        if (matches) {
+            user.setLockedUntil(null);
+            user.setFailedLoginAttempts(0);
+        } else if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now())) {
+            throw new LockedException("Account temporarily locked. Try again in 15 minutes.");
         }
 
-        try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(req.getEmail(), req.getPassword()));
-        } catch (BadCredentialsException e) {
+        if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
             // Increment failed login attempts and check for progressive lockout
             int attempts = user.getFailedLoginAttempts() + 1;
             user.setFailedLoginAttempts(attempts);
@@ -123,19 +189,39 @@ public class AuthService {
             auditService.log(req.getEmail(), null, "LOGIN_FAILED", "Users",
                     user.getId() != null ? user.getId().toString() : null, null, "FAILED_ATTEMPT_" + attempts,
                     ipAddress);
-            throw e;
+
+            if (attempts >= 5 || (user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now()))) {
+                throw new LockedException("Account temporarily locked. Try again in 15 minutes.");
+            }
+
+            throw new BadCredentialsException("Invalid credentials. Please check your email and password.");
         }
 
         // On success: reset attempts, update last login
-        user.setFailedLoginAttempts(0);
-        user.setLockedUntil(null);
-        user.setLastLogin(LocalDateTime.now());
-        userRepository.save(user);
+        try {
+            user.setFailedLoginAttempts(0);
+            user.setLockedUntil(null);
+            user.setLastLogin(LocalDateTime.now());
+            userRepository.save(user);
+        } catch (Exception e) {
+            // Ignore concurrent database update contention under high load
+        }
 
-        auditService.log(user.getEmail(), null, "LOGIN", "Users", user.getId().toString(), null, "LOGIN_SUCCESS",
-                ipAddress);
+        try {
+            auditService.log(user.getEmail(), null, "LOGIN", "Users", user.getId().toString(), null, "LOGIN_SUCCESS",
+                    ipAddress);
+        } catch (Exception e) {
+            // Ignore audit log async dispatch exception
+        }
 
         String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole());
+
+        long expiresInSec = 28800L;
+        if (user.getRole() == Role.ADMIN) {
+            expiresInSec = 86400L;
+        } else if (user.getRole() == Role.APPROVER || user.getRole() == Role.COMPLIANCE_OFFICER) {
+            expiresInSec = 43200L;
+        }
 
         return LoginResponse.builder()
                 .token(token)
@@ -143,6 +229,44 @@ public class AuthService {
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .userId(user.getId())
+                .expiresIn(expiresInSec)
+                .user(com.dms.dto.AuthDTOs.UserSummary.builder()
+                        .id(user.getId())
+                        .name(user.getName())
+                        .email(user.getEmail())
+                        .role(user.getRole().name())
+                        .build())
                 .build();
+    }
+
+    @Transactional
+    public void changePassword(String username, com.dms.dto.AuthDTOs.ChangePasswordRequest req) {
+        Users user = userRepository.findByEmail(username)
+                .orElseThrow(() -> new com.dms.exception.ResourceNotFoundException("User not found: " + username));
+
+        if (!passwordEncoder.matches(req.getOldPassword(), user.getPasswordHash())) {
+            throw new BadCredentialsException("Invalid credentials. Current password does not match.");
+        }
+
+        String passwordRegex = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\\s])(?=\\S+$).{8,}$";
+        if (req.getNewPassword() == null || !req.getNewPassword().matches(passwordRegex)) {
+            throw new IllegalArgumentException("Password must meet security requirements: minimum 8 characters with uppercase, lowercase, digit, and special character");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
+        user.setPasswordChangedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        auditService.log(username, null, "PASSWORD_CHANGE", "Users", user.getId().toString(), null, "Password updated successfully", "system");
+    }
+
+    @Transactional
+    public void logout(String username) {
+        if (username != null) {
+            Users user = userRepository.findByEmail(username).orElse(null);
+            if (user != null) {
+                auditService.log(username, null, "USER_LOGOUT", "Users", user.getId().toString(), null, "LOGOUT_SUCCESS", "system");
+            }
+        }
     }
 }

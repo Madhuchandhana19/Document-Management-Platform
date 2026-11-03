@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { FileText, Eye, EyeOff, User, Mail, Lock, ArrowLeft, Check, AlertCircle, Loader2 } from 'lucide-react'
 import type { Page } from '../App'
 import { api } from '../utils/api'
+import { toast } from '../components/Toast'
 
 interface Props { onNavigate: (p: Page) => void }
 
@@ -32,53 +33,64 @@ export default function RegisterPage({ onNavigate }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!username || !email || !password || !fullName) {
-      setError('Please fill in all required fields.')
+      const msg = 'Please fill in all required fields.'
+      setError(msg)
+      toast.warning(msg, 'Required Fields Missing')
       return
     }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long.')
+    const passwordRegex = /^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\s])(?=\S+$).{8,}$/
+    if (!passwordRegex.test(password)) {
+      const msg = 'Password must be at least 8 characters long and contain uppercase (A-Z), lowercase (a-z), a number (0-9), at least 1 special character (e.g. @, #, $, !, etc.), and no spaces.'
+      setError(msg)
+      toast.warning(msg, 'Weak Password')
       return
     }
     if (!/^[A-Za-z ]{2,100}$/.test(fullName)) {
-      setError('Name must not contain numbers or special characters')
+      const msg = 'Name must not contain numbers or special characters'
+      setError(msg)
+      toast.warning(msg, 'Invalid Name')
       return
     }
     if (!/^\d{10}$/.test(phoneNumber)) {
-      setError('Phone Number must be exactly 10 digits long')
+      const msg = 'Phone Number must be exactly 10 digits long'
+      setError(msg)
+      toast.warning(msg, 'Invalid Phone Number')
       return
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.')
+      const msg = 'Passwords do not match.'
+      setError(msg)
+      toast.warning(msg, 'Password Mismatch')
       return
     }
 
     setError(null)
     setLoading(true)
 
-    // Split full name
-    const parts = fullName.trim().split(/\s+/)
-    const firstName = parts[0] || ''
-    const lastName = parts.slice(1).join(' ') || ''
-
     try {
       const response = await api.post<any>('/api/auth/register', {
-        name: fullName,
-        phoneNumber: phoneNumber,
-        email: email,
+        name: fullName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        email: email.trim().toLowerCase(),
         password: password,
         role: role
       })
 
       if (response.success) {
         setSuccess(true)
+        toast.success(`Account registered successfully for ${email.trim()}!`, 'Registration Successful')
         setTimeout(() => {
           onNavigate('login')
         }, 2000)
       } else {
-        setError(response.message || 'Registration failed.')
+        const msg = response.message || 'Registration failed.'
+        setError(msg)
+        toast.error(msg, 'Registration Failed')
       }
     } catch (err: any) {
-      setError(err.message || 'Connection error. Please try again.')
+      const msg = err.message || 'Connection error. Please try again.'
+      setError(msg)
+      toast.error(msg, 'Registration Error')
     } finally {
       setLoading(false)
     }
@@ -164,7 +176,7 @@ export default function RegisterPage({ onNavigate }: Props) {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
               <label className="block text-xs font-700 text-[#1E293B] mb-2 uppercase tracking-wide">Full Name</label>
               <div className="relative">
@@ -174,6 +186,7 @@ export default function RegisterPage({ onNavigate }: Props) {
                   value={fullName}
                   disabled={loading || success}
                   onChange={e => setFullName(e.target.value)}
+                  autoComplete="off"
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#1E293B] text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25 focus:border-[#2563EB] focus:bg-white transition-all"
                   placeholder="First Last"
                 />
@@ -189,8 +202,9 @@ export default function RegisterPage({ onNavigate }: Props) {
                   value={username}
                   disabled={loading || success}
                   onChange={e => setUsername(e.target.value)}
+                  autoComplete="off"
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#1E293B] text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25 focus:border-[#2563EB] focus:bg-white transition-all"
-                  placeholder="username"
+                  placeholder="johndoe"
                 />
               </div>
             </div>
@@ -203,6 +217,7 @@ export default function RegisterPage({ onNavigate }: Props) {
                   value={phoneNumber}
                   disabled={loading || success}
                   onChange={e => setPhoneNumber(e.target.value)}
+                  autoComplete="off"
                   className="w-full pl-4 pr-4 py-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#1E293B] text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25 focus:border-[#2563EB] focus:bg-white transition-all"
                   placeholder="1234567890"
                 />
@@ -218,8 +233,9 @@ export default function RegisterPage({ onNavigate }: Props) {
                   value={email}
                   disabled={loading || success}
                   onChange={e => setEmail(e.target.value)}
+                  autoComplete="off"
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#1E293B] text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25 focus:border-[#2563EB] focus:bg-white transition-all"
-                  placeholder="you@example.com"
+                  placeholder="user@dms.com"
                 />
               </div>
             </div>
@@ -232,13 +248,16 @@ export default function RegisterPage({ onNavigate }: Props) {
                 onChange={e => setRole(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#1E293B] text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25 focus:border-[#2563EB] focus:bg-white transition-all font-medium"
               >
-                <option value="DOCUMENT_OWNER">Document Owner (Full control over own docs)</option>
+                <option value="VIEWER">Viewer (Read-only access)</option>
                 <option value="EDITOR">Editor (Create, upload & modify documents)</option>
                 <option value="APPROVER">Approver (Approve & reject workflows)</option>
-                <option value="VIEWER">Viewer (Read-only access)</option>
-                <option value="COMPLIANCE_OFFICER">Compliance Officer (Auditing & retention)</option>
-                <option value="GUEST">Guest (Very limited access)</option>
+                <option value="MANAGER">Manager (Departmental oversight)</option>
+                <option value="SUPERVISOR">Supervisor (Team workflow supervision)</option>
+                <option value="OFFICER">Officer (Compliance & policy auditing)</option>
+                <option value="DOCUMENT_OWNER">Owner (Full control over own docs)</option>
                 <option value="ADMIN">Admin (Full system control)</option>
+                <option value="GUEST">Guest (Very limited access)</option>
+                <option value="COMPLIANCE_OFFICER">Compliance Officer (Auditing & retention)</option>
               </select>
             </div>
 
@@ -252,6 +271,7 @@ export default function RegisterPage({ onNavigate }: Props) {
                     value={password}
                     disabled={loading || success}
                     onChange={e => setPassword(e.target.value)}
+                    autoComplete="new-password"
                     placeholder="••••••••"
                     className="w-full pl-10 pr-10 py-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#1E293B] text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25 focus:border-[#2563EB] focus:bg-white transition-all"
                   />
@@ -269,6 +289,7 @@ export default function RegisterPage({ onNavigate }: Props) {
                     value={confirmPassword}
                     disabled={loading || success}
                     onChange={e => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
                     placeholder="••••••••"
                     className="w-full pl-10 pr-10 py-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#1E293B] text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25 focus:border-[#2563EB] focus:bg-white transition-all"
                   />
@@ -277,6 +298,39 @@ export default function RegisterPage({ onNavigate }: Props) {
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Password strength meter */}
+            {password.length > 0 && (
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] font-semibold text-[#64748B]">Password Strength:</span>
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                  password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9\s]/.test(password)
+                    ? 'bg-green-100 text-green-700 border border-green-300'
+                    : password.length >= 6
+                    ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                    : 'bg-red-100 text-red-700 border border-red-300'
+                }`}>
+                  {password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9\s]/.test(password)
+                    ? 'Strong'
+                    : password.length >= 6
+                    ? 'Medium'
+                    : 'Weak'}
+                </span>
+              </div>
+            )}
+
+            {/* Password requirements visual guide */}
+            <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-3 text-[11px] text-[#64748B] space-y-1">
+              <p className="font-600 text-[#334155]">Password Requirements:</p>
+              <ul className="grid grid-cols-2 gap-x-2 gap-y-1 list-disc list-inside text-[10.5px]">
+                <li className={password.length >= 8 ? 'text-green-600 font-600' : ''}>At least 8 characters</li>
+                <li className={/[A-Z]/.test(password) ? 'text-green-600 font-600' : ''}>At least 1 uppercase (A-Z)</li>
+                <li className={/[a-z]/.test(password) ? 'text-green-600 font-600' : ''}>At least 1 lowercase (a-z)</li>
+                <li className={/[0-9]/.test(password) ? 'text-green-600 font-600' : ''}>At least 1 number (0-9)</li>
+                <li className={/[^A-Za-z0-9\s]/.test(password) ? 'text-green-600 font-600' : ''}>At least 1 special character</li>
+                <li className={password.length > 0 && !/\s/.test(password) ? 'text-green-600 font-600' : ''}>No spaces</li>
+              </ul>
             </div>
 
             <button

@@ -33,24 +33,42 @@ public class AccessControlService {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Document not found with ID: " + documentId));
 
-        Users targetUser = userRepository.findById(req.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("Target user not found with ID: " + req.getUserId()));
+        if (req.getUserId() == null && (req.getUserEmail() == null || req.getUserEmail().trim().isEmpty())) {
+            throw new IllegalArgumentException("User ID is required");
+        }
+
+        Users targetUser = null;
+        if (req.getUserId() != null) {
+            targetUser = userRepository.findById(req.getUserId()).orElse(null);
+        }
+        if (targetUser == null && req.getUserEmail() != null) {
+            targetUser = userRepository.findByEmail(req.getUserEmail().trim().toLowerCase()).orElse(null);
+        }
+        if (targetUser == null) {
+            throw new ResourceNotFoundException("Target user not found");
+        }
 
         Users granter = userRepository.findByEmail(grantedByUsername)
                 .orElseThrow(() -> new ResourceNotFoundException("Granter user not found: " + grantedByUsername));
 
-        // Security check: Only the document owner or an ADMIN may grant access
+        // Security check: Only document owner, ADMIN, or user with MANAGE permission may grant access
         boolean isOwner = document.getOwner().getId().equals(granter.getId());
         boolean isAdmin = granter.getRole() == Role.ADMIN;
-        if (!isOwner && !isAdmin) {
-            throw new UnauthorisedAccessException("Only the document owner or an ADMIN can grant access permissions");
+        boolean hasManage = accessControlRepository.findByDocumentId(documentId).stream()
+                .filter(a -> a.getUser().getId().equals(granter.getId()))
+                .filter(a -> !a.getValidFrom().isAfter(LocalDate.now()))
+                .filter(a -> a.getValidTo() == null || !a.getValidTo().isBefore(LocalDate.now()))
+                .anyMatch(a -> a.getPermission() == Permission.MANAGE);
+
+        if (!isOwner && !isAdmin && !hasManage) {
+            throw new UnauthorisedAccessException("Insufficient permission. EDIT allows changes only, not permission management.");
         }
 
         Permission permission;
         try {
             permission = Permission.valueOf(req.getPermission().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid permission value: " + req.getPermission());
+            throw new IllegalArgumentException("Invalid permission. Must be one of: VIEW, EDIT, APPROVE, MANAGE");
         }
 
         AccessControl accessControl = AccessControl.builder()
@@ -64,9 +82,10 @@ public class AccessControlService {
 
         accessControlRepository.save(accessControl);
 
-        // Audit Log
+        // Audit Log matching SRS format: "owner@dms.com granted VIEW to alice@dms.com"
+        String auditMessage = granter.getEmail() + " granted " + permission.name() + " to " + targetUser.getEmail();
         auditService.log(grantedByUsername, document, "ACCESS_GRANT", "AccessControl",
-                accessControl.getId().toString(), null, permission.name() + " to " + targetUser.getEmail(), "system");
+                accessControl.getId().toString(), null, auditMessage, "system");
 
         return toResponse(accessControl);
     }
@@ -79,11 +98,17 @@ public class AccessControlService {
         Users revoker = userRepository.findByEmail(revokedByUsername)
                 .orElseThrow(() -> new ResourceNotFoundException("Revoker user not found: " + revokedByUsername));
 
-        // Security check: Only the document owner or an ADMIN may revoke access
+        // Security check: Only document owner, ADMIN, or user with MANAGE permission may revoke access
         boolean isOwner = document.getOwner().getId().equals(revoker.getId());
         boolean isAdmin = revoker.getRole() == Role.ADMIN;
-        if (!isOwner && !isAdmin) {
-            throw new UnauthorisedAccessException("Only the document owner or an ADMIN can revoke access permissions");
+        boolean hasManage = accessControlRepository.findByDocumentId(documentId).stream()
+                .filter(a -> a.getUser().getId().equals(revoker.getId()))
+                .filter(a -> !a.getValidFrom().isAfter(LocalDate.now()))
+                .filter(a -> a.getValidTo() == null || !a.getValidTo().isBefore(LocalDate.now()))
+                .anyMatch(a -> a.getPermission() == Permission.MANAGE);
+
+        if (!isOwner && !isAdmin && !hasManage) {
+            throw new UnauthorisedAccessException("Insufficient permission. EDIT allows changes only, not permission management.");
         }
 
         Permission permission;
@@ -99,8 +124,9 @@ public class AccessControlService {
         accessControlRepository.delete(accessControl);
 
         // Audit Log
+        String auditMessage = revoker.getEmail() + " revoked " + permission.name() + " for " + accessControl.getUser().getEmail();
         auditService.log(revokedByUsername, document, "ACCESS_REVOKE", "AccessControl",
-                accessControl.getId().toString(), permission.name() + " for " + accessControl.getUser().getEmail(), null, "system");
+                accessControl.getId().toString(), permission.name() + " for " + accessControl.getUser().getEmail(), auditMessage, "system");
     }
 
     public List<AccessControlResponse> list(Long documentId) {
@@ -132,10 +158,21 @@ public class AccessControlService {
                 .anyMatch(a -> satisfiesPermission(a.getPermission(), permission));
     }
 
+    public LocalDate getExpiredValidToDate(Long documentId, Long userId) {
+        List<AccessControl> aclList = accessControlRepository.findByDocumentId(documentId);
+        LocalDate today = LocalDate.now();
+        return aclList.stream()
+                .filter(a -> a.getUser().getId().equals(userId))
+                .filter(a -> a.getValidTo() != null && a.getValidTo().isBefore(today))
+                .map(AccessControl::getValidTo)
+                .findFirst()
+                .orElse(null);
+    }
+
     private boolean satisfiesPermission(Permission granted, Permission required) {
         if (granted == required) return true;
         if (granted == Permission.MANAGE) return true;
-        if (granted == Permission.APPROVE && (required == Permission.EDIT || required == Permission.VIEW)) return true;
+        if (granted == Permission.APPROVE && required == Permission.VIEW) return true;
         if (granted == Permission.EDIT && required == Permission.VIEW) return true;
         return false;
     }
